@@ -1,37 +1,38 @@
 FROM php:8.2-apache
 
-# Instalar extensiones necesarias para Laravel + PostgreSQL
+# Dependencias del sistema
 RUN apt-get update && apt-get install -y \
     git curl zip unzip libpq-dev libpng-dev libonig-dev libxml2-dev \
     && docker-php-ext-install pdo pdo_pgsql pgsql mbstring exif pcntl bcmath gd
 
-# Instalar Composer
+# Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Configurar Apache para Laravel
+# Apache config
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/sites-available/*.conf
+
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Activar mod_rewrite (necesario para las rutas de Laravel)
 RUN a2enmod rewrite
 
-# Copiar el proyecto
 WORKDIR /var/www/html
+
 COPY . .
 
-# Instalar dependencias PHP
+# Instalar dependencias
 RUN composer install --no-dev --optimize-autoloader
 
-# Permisos de carpetas de Laravel
+# Permisos Laravel
 RUN chown -R www-data:www-data /var/www/html/storage \
     && chown -R www-data:www-data /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
-# Script de inicio
+# Entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

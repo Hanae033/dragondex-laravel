@@ -3,35 +3,30 @@ set -e
 
 echo "🔧 Configurando .env..."
 
-# Usar Python para parsear DATABASE_URL de forma fiable
-# Python maneja URLs con o sin puerto, con caracteres especiales, etc.
-eval $(python3 -c "
-import urllib.parse, os
+# Validar DATABASE_URL
+if [ -z "$DATABASE_URL" ]; then
+  echo "❌ ERROR: DATABASE_URL no está definida"
+  exit 1
+fi
 
-url = os.environ.get('DATABASE_URL', '')
-if not url:
-    print('echo ERROR: DATABASE_URL no está definida')
-    exit(1)
+# Parseo seguro con bash (sin python)
+DB_HOST=$(echo $DATABASE_URL | sed -E 's|.*@([^:/]+):.*|\1|')
+DB_PORT=$(echo $DATABASE_URL | sed -E 's|.*:([0-9]+)/.*|\1|')
+DB_DATABASE=$(echo $DATABASE_URL | sed -E 's|.*/([^?]+).*|\1|')
+DB_USERNAME=$(echo $DATABASE_URL | sed -E 's|.*//([^:]+):.*@\w+.*|\1|')
+DB_PASSWORD=$(echo $DATABASE_URL | sed -E 's|.*//[^:]+:([^@]+)@.*|\1|')
 
-p = urllib.parse.urlparse(url)
-print(f'DB_HOST={p.hostname}')
-print(f'DB_PORT={p.port if p.port else 5432}')
-print(f'DB_DATABASE={p.path.lstrip(\"/\")}')
-print(f'DB_USERNAME={p.username}')
-print(f'DB_PASSWORD={p.password}')
-")
+echo "📍 Conectando a: $DB_HOST:$DB_PORT / $DB_DATABASE"
 
-echo "📍 Conectando a: ${DB_HOST}:${DB_PORT} / ${DB_DATABASE}"
-
-# Escribir el .env completo con los datos ya parseados
+# Crear .env limpio
 cat > /var/www/html/.env << EOF
 APP_NAME=DragonDex
-APP_ENV=${APP_ENV:-production}
+APP_ENV=production
 APP_KEY=${APP_KEY}
-APP_DEBUG=${APP_DEBUG:-false}
-APP_URL=${APP_URL:-http://localhost}
+APP_DEBUG=false
+APP_URL=${APP_URL}
 
-LOG_CHANNEL=${LOG_CHANNEL:-stderr}
+LOG_CHANNEL=stderr
 LOG_LEVEL=error
 
 DB_CONNECTION=pgsql
@@ -48,6 +43,7 @@ EOF
 
 echo "✅ .env creado"
 
+# Laravel cache
 php artisan config:clear
 php artisan cache:clear
 php artisan config:cache
@@ -56,8 +52,10 @@ php artisan view:cache
 
 echo "✅ Cachés generadas"
 
+# Migraciones
 php artisan migrate --force
 
 echo "✅ Migraciones ejecutadas"
 
+# Iniciar Apache
 apache2-foreground
