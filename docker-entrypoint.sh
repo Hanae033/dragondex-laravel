@@ -1,8 +1,20 @@
 #!/bin/bash
 set -e
 
-# Escribir el .env completo directamente con las variables de Render
-# APP_KEY ya viene como variable de entorno de Render → no necesitamos key:generate
+echo "🔧 Configurando .env..."
+
+# Parsear DATABASE_URL para extraer los datos de conexión
+# Formato: postgres://usuario:contraseña@host:puerto/basededatos
+if [ -n "$DATABASE_URL" ]; then
+    # Extraer cada parte de la URL
+    DB_USERNAME=$(echo $DATABASE_URL | sed 's/postgres:\/\/\([^:]*\):.*/\1/')
+    DB_PASSWORD=$(echo $DATABASE_URL | sed 's/postgres:\/\/[^:]*:\([^@]*\)@.*/\1/')
+    DB_HOST=$(echo $DATABASE_URL | sed 's/postgres:\/\/[^@]*@\([^:]*\):.*/\1/')
+    DB_PORT=$(echo $DATABASE_URL | sed 's/postgres:\/\/[^@]*@[^:]*:\([^\/]*\)\/.*/\1/')
+    DB_DATABASE=$(echo $DATABASE_URL | sed 's/postgres:\/\/[^@]*@[^\/]*\/\(.*\)/\1/')
+fi
+
+# Escribir el .env completo con los datos extraídos
 cat > /var/www/html/.env << EOF
 APP_NAME=DragonDex
 APP_ENV=${APP_ENV:-production}
@@ -13,15 +25,19 @@ APP_URL=${APP_URL:-http://localhost}
 LOG_CHANNEL=${LOG_CHANNEL:-stderr}
 LOG_LEVEL=error
 
-DB_CONNECTION=${DB_CONNECTION:-pgsql}
-DATABASE_URL=${DATABASE_URL}
+DB_CONNECTION=pgsql
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT:-5432}
+DB_DATABASE=${DB_DATABASE}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
 
 CACHE_STORE=file
 SESSION_DRIVER=file
 QUEUE_CONNECTION=sync
 EOF
 
-echo "✅ .env creado correctamente"
+echo "✅ .env creado con host: ${DB_HOST}, BD: ${DB_DATABASE}"
 
 # Limpiar cachés viejas
 php artisan config:clear
